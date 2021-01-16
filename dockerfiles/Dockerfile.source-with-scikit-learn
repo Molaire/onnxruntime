@@ -10,7 +10,7 @@ MAINTAINER Vincent Thibault
 ADD . /code
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends python3-dev ca-certificates g++ python3-numpy python3-pandas python3-sklearn python3-sklearn-lib gcc make git python3-setuptools python3-wheel python3-pip aria2 && aria2c -q -d /tmp -o cmake-3.18.2-Linux-x86_64.tar.gz https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2-Linux-x86_64.tar.gz && tar -zxf /tmp/cmake-3.18.2-Linux-x86_64.tar.gz --strip=1 -C /usr
+RUN apt-get update && apt-get install -y --no-install-recommends python3-dev ca-certificates g++ python3-numpy python3-sklearn-pandas gcc make git python3-setuptools python3-wheel python3-pip aria2 && aria2c -q -d /tmp -o cmake-3.18.2-Linux-x86_64.tar.gz https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2-Linux-x86_64.tar.gz && tar -zxf /tmp/cmake-3.18.2-Linux-x86_64.tar.gz --strip=1 -C /usr
 
 # Prepare onnxruntime repository & build onnxruntime
 RUN cd /code && /bin/bash ./build.sh --skip_submodule_sync --use_openmp --config Release --build_wheel --update --build --parallel --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat ./VERSION_NUMBER) 
@@ -18,4 +18,4 @@ RUN cd /code && /bin/bash ./build.sh --skip_submodule_sync --use_openmp --config
 FROM ubuntu:18.04
 COPY --from=builder /code/build/Linux/Release/dist /root
 COPY --from=builder /code/dockerfiles/LICENSE-IMAGE.txt /code/LICENSE-IMAGE.txt
-RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libgomp1 ca-certificates python3-setuptools python3-wheel python3-pip unattended-upgrades && unattended-upgrade && python3 -m pip install /root/*.whl && rm -rf /root/*.whl
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libgomp1 ca-certificates python3-setuptools python3-sklearn-pandas python3-wheel python3-pip unattended-upgrades && unattended-upgrade && python3 -m pip install /root/*.whl && rm -rf /root/*.whl
