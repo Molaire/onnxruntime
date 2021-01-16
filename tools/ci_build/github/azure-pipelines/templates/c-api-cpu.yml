@@ -405,7 +405,8 @@ jobs:
       artifactName: 'drop-onnxruntime-java-osx-x64'
       targetPath: '$(Build.BinariesDirectory)\java-artifact\onnxruntime-java-osx-x64'
  
-  - task: CmdLine@2
+  - task: BatchScript@1
+    displayName: 'Jar packaging'
     inputs:
       filename: $(Build.SourcesDirectory)\tools\ci_build\github\windows\jar_packaging.bat
       workingDirectory: '$(Build.BinariesDirectory)\java-artifact'
