@@ -426,12 +426,15 @@ jobs:
   pool: 'Win-CPU-2019'
   variables:
     OrtPackageId: ${{ parameters.OrtNugetPackageId }}
+    breakCodesignValidationInjection: ${{ parameters.DoEsrp }}
   dependsOn:
   - Linux_C_API_Packaging_CPU_x64
   - MacOS_C_API_Packaging_CPU_x64
   - Windows_Packaging_CPU
   condition: succeeded()
-  steps: 
+  steps:
+  - checkout: self
+    submodules: true
   - task: DownloadPipelineArtifact@0
     displayName: 'Download Pipeline Artifact - NuGet'
     inputs:
@@ -514,6 +517,12 @@ jobs:
       arguments: '--configuration RelWithDebInfo -p:Platform="Any CPU" -p:OnnxRuntimeBuildDirectory="$(Build.BinariesDirectory)" -p:OrtPackageId=$(OrtPackageId)'
       workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
+  - template: win-esrp-dll.yml
+    parameters:
+      FolderPath: '$(Build.SourcesDirectory)\csharp\src\Microsoft.ML.OnnxRuntime\bin\RelWithDebInfo'
+      DisplayName: 'ESRP - Sign C# dlls'
+      DoEsrp: ${{ parameters.DoEsrp }}
+
   - task: DotNetCoreCLI@2
     displayName: 'Build Nuget Packages'
     inputs:
@@ -522,12 +531,6 @@ jobs:
       configuration: RelWithDebInfo
       arguments: '--configuration RelWithDebInfo -t:CreatePackage -p:Platform="Any CPU" -p:OnnxRuntimeBuildDirectory="$(Build.BinariesDirectory)" -p:OrtPackageId=$(OrtPackageId)'
       workingDirectory: '$(Build.SourcesDirectory)\csharp'
-        
-  - template: win-esrp-dll.yml
-    parameters:
-      FolderPath: '$(Build.SourcesDirectory)\csharp\src\Microsoft.ML.OnnxRuntime\bin\RelWithDebInfo'
-      DisplayName: 'ESRP - Sign C# dlls'
-      DoEsrp: ${{ parameters.DoEsrp }}
 
   - task: BatchScript@1
     displayName: 'Bundle Native NuGet and other binaries'
@@ -568,13 +571,32 @@ jobs:
       artifactName: 'drop-signed-nuget'
       targetPath: '$(Build.ArtifactStagingDirectory)'
 
-  # - task: RoslynAnalyzers@2
-    # displayName: 'Run Roslyn Analyzers'
-    # inputs:
-      # userProvideBuildInfo: msBuildInfo
-      # msBuildArchitecture: 'Any CPU'
-      # msBuildCommandline: '"C:\Program Files\dotnet\dotnet.exe" build $(Build.SourcesDirectory)\csharp\OnnxRuntime.CSharp.sln --configuration RelWithDebInfo -p:Platform="Any CPU" -p:OnnxRuntimeBuildDirectory="$(Build.BinariesDirectory)" -p:OrtPackageId=$(OrtPackageId)'
-    # condition: and(succeeded(), eq('${{ parameters.DoCompliance }}', true))
+  - powershell: |
+     $counter = 0
+     Get-ChildItem -Path $(Build.ArtifactStagingDirectory)/*.nupkg | foreach {7z x -y -o$counter $_.fullname;$counter++}
+    workingDirectory: '$(Build.ArtifactStagingDirectory)'
+    displayName: 'Unzip files to sanitize the PE files'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build C#'
+    inputs:
+      command: custom
+      custom: clean
+      projects: '$(Build.SourcesDirectory)\csharp\OnnxRuntime.CSharp.sln'
+      configuration: RelWithDebInfo
+      arguments: '--configuration RelWithDebInfo -p:Platform="Any CPU" -p:OnnxRuntimeBuildDirectory="$(Build.BinariesDirectory)" -p:OrtPackageId=$(OrtPackageId)'
+      workingDirectory: '$(Build.SourcesDirectory)\csharp'
+
+  - task: BinSkim@3
+    displayName: 'Run BinSkim'
+
+  - task: RoslynAnalyzers@2
+    displayName: 'Run Roslyn Analyzers'
+    inputs:
+      userProvideBuildInfo: msBuildInfo
+      msBuildArchitecture: DotNetCore
+      msBuildCommandline: '"C:\Program Files\dotnet\dotnet.exe" build $(Build.SourcesDirectory)\csharp\OnnxRuntime.CSharp.sln --configuration RelWithDebInfo -p:Platform="Any CPU" -p:OnnxRuntimeBuildDirectory="$(Build.BinariesDirectory)" -p:OrtPackageId=$(OrtPackageId)'
+    condition: and(succeeded(), eq('${{ parameters.DoCompliance }}', true))
 
   - template: component-governance-component-detection-steps.yml
     parameters :
@@ -775,4 +797,3 @@ jobs:
           DYLD_LIBRARY_PATH=./test:${DYLD_LIBRARY_PATH}
           java -jar ./junit-platform-console-standalone-1.6.2.jar -cp .:./test:./protobuf-java-3.9.2.jar:./onnxruntime-$(OnnxRuntimeVersion).jar --scan-class-path --fail-if-no-tests --disable-banner
         workingDirectory: '$(Build.BinariesDirectory)/final-jar'
-
