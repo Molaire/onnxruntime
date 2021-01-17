@@ -5,7 +5,7 @@
 # Dockerfile to run ONNXRuntime with source build for CPU
 # Modified by Vincent Thibault to have sklearn compiled on it.
 
-FROM ubuntu:20.10 AS builder
+FROM ubuntu:18.04 AS builder
 MAINTAINER Vincent Thibault
 ADD . /code
 
@@ -29,14 +29,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Prepare onnxruntime repository & build onnxruntime
 RUN cd /code && /bin/bash ./build.sh --skip_submodule_sync --use_openmp --config Release --build_wheel --update --build --parallel --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat ./VERSION_NUMBER) 
 
-FROM ubuntu:20.10 AS production
+FROM ubuntu:18.04 AS production
 COPY --from=builder /code/build/Linux/Release/dist /root
 COPY --from=builder /code/dockerfiles/LICENSE-IMAGE.txt /code/LICENSE-IMAGE.txt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.8 \
+    &&
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgomp1 \
     ca-certificates \
-    python3-pandas \
     python3-sklearn \
     python3-setuptools \
     python3-wheel \
@@ -44,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unattended-upgrades \
     && unattended-upgrade \
     && python3 -m pip install /root/*.whl \
-    && rm -rf /root/*.whl
+    && rm -rf /root/*.whl \
+    && python3 pip install pandas --no-cache-dir
 
 CMD ["python3"]
